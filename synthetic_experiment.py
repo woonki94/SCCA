@@ -7,13 +7,15 @@ if __name__ == "__main__":
     als_cca = ALS_CCA()
 
     for i in range (10):
-        X, Y = helper.generate_correlated_data(dx=100, dy=100, N=1000, noise_level=1)
+        #X, Y = helper.generate_correlated_data(dx=100, dy=100, N=1000, noise_level=1)
+        X,Y = helper.generate_strictly_low_rank_data()
         print(X.shape)
         print(Y.shape)
 
         u_als, v_als, elapsed_time = als_cca.fit(X, Y, SGD=False)
         u_als_sgd, v_als_sgd, sgd_elapsed_time = als_cca.fit(X, Y,SGD=True)
-
+        print("als time: " ,elapsed_time)
+        print("sgd time: " , sgd_elapsed_time)
         #print("ALS CCA - u:", u_als.ravel())
         #print("ALS CCA - v:", v_als.ravel())
         #helper.plot_points(X,Y)

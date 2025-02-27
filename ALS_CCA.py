@@ -117,7 +117,7 @@ class ALS_CCA:
                 u /= np.sqrt(u.T @ Σxx @ u)
 
                 # Early stopping
-                if np.linalg.norm(u - u_prev) < self.tol:
-                    return u
+                #if np.linalg.norm(u - u_prev) < self.tol:
+                #    return u
 
         return u

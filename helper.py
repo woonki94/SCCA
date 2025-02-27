@@ -106,6 +106,50 @@ def generate_correlated_data(dx=10, dy=10, N=100, noise_level=0.1):
 
     return X, Y
 
+
+def generate_strictly_low_rank_data(dx=100, dy=100, N=1000, rank=10, sparsity=0.8, noise_level=1):
+    """
+    Generates a strictly low-rank synthetic dataset by projecting onto the top singular vectors.
+
+    Args:
+        dx (int): Dimensionality of X
+        dy (int): Dimensionality of Y
+        N (int): Number of samples
+        rank (int): The true rank of the latent structure
+        sparsity (float): Fraction of nonzero elements in transformation matrices
+        noise_level (float): Amount of noise to add
+
+    Returns:
+        X (numpy.ndarray): Strictly low-rank, sparse, high-variance correlated data matrix for view 1
+        Y (numpy.ndarray): Strictly low-rank, sparse, high-variance correlated data matrix for view 2
+    """
+    # Shared latent factors (strongly limited to rank dimensions)
+    Z = np.random.randn(rank, N) * 2  # Increase variance by scaling
+
+    # Sparse transformation matrices with controlled rank
+    A = np.random.randn(dx, rank)
+    B = np.random.randn(dy, rank)
+
+    # Introduce sparsity
+    A[np.random.rand(*A.shape) > sparsity] = 0
+    B[np.random.rand(*B.shape) > sparsity] = 0
+
+    # Generate X and Y before enforcing strict low-rank structure
+    X = A @ Z + noise_level * np.random.randn(dx, N)
+    Y = B @ Z + noise_level * np.random.randn(dy, N)
+
+    # Apply Singular Value Thresholding (SVT) to enforce strict low-rank structure
+    def enforce_low_rank(matrix, rank):
+        U, S, Vt = np.linalg.svd(matrix, full_matrices=False)
+        S[rank:] = 0  # Zero out singular values beyond the target rank
+        return U @ np.diag(S) @ Vt
+
+    X = enforce_low_rank(X, rank)
+    Y = enforce_low_rank(Y, rank)
+
+    return X, Y
+
+
 def canonical_correlation(X, Y, u, v):
     proj_X = u.T @ X
     proj_Y = v.T @ Y
