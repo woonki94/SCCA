@@ -1,0 +1,17 @@
+# Ignore Python compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore virtual environment
+venv/
+env/
+
+# Ignore test files
+reference/
+
+.idea/
+
+# Ignore system files (macOS, Windows, Linux)
+.DS_Store
