@@ -10,7 +10,7 @@ import time
 
 
 class ALS_CCA:
-    def __init__(self, gamma_x=1e-5, gamma_y=1e-5, max_iter=600, tol=1e-6):
+    def __init__(self, gamma_x=1e-8, gamma_y=1e-8, max_iter=600, tol=1e-6):
         self.gamma_x = gamma_x
         self.gamma_y = gamma_y
         self.max_iter = max_iter
@@ -26,15 +26,19 @@ class ALS_CCA:
         Sigma_yy = (Y.T @ Y) / N + self.gamma_y * np.eye(dy)
         Sigma_xy = (X.T @ Y) / N
 
+
         u = np.ones((dx, 1))
         v = np.ones((dy, 1))
         u /= np.linalg.norm(u)
         v /= np.linalg.norm(v)
 
+        #u = self.gs(np.random.randn(dx, 3), Sigma_xx)
+        #v = self.gs(np.random.randn(dy, 3), Sigma_yy)
+
         # Compute exact solution using SVD for comparison
-        #U, S, Vt = np.linalg.svd(np.linalg.solve(Sigma_xx, Sigma_xy) @ np.linalg.inv(Sigma_yy), full_matrices=False)
-        #u_opt = U[:, [0]]
-        #v_opt = Vt.T[:, [0]]
+        U, S, Vt = np.linalg.svd(np.linalg.solve(Sigma_xx, Sigma_xy) @ np.linalg.inv(Sigma_yy), full_matrices=False)
+        u_opt = U[:, [0]]
+        v_opt = Vt.T[:, [0]]
 
         suboptimality = []
         num_passes = 0
@@ -45,7 +49,6 @@ class ALS_CCA:
         for _ in range(self.max_iter):
             if method == "SVRG":
                 u_new = self.svrg(X, Y, self.gamma_x, u, v, num_epochs=100, lr=lr)
-                #u_new = self.svrg(X, Y, self.gamma_x, u, v, num_epochs=30, lr=lr)
             elif method == "GD":
                 u_new = self.gradient_descent(X, Y, self.gamma_x, u, v, num_epochs=100, lr=lr)
             elif method == "ASVRG":
@@ -53,9 +56,9 @@ class ALS_CCA:
             else:  # Default ALS update
                 u_new = np.linalg.solve(Sigma_xx, Sigma_xy @ v)
 
+
             if method == "SVRG":
                 v_new = self.svrg(Y, X, self.gamma_y, v, u_new, num_epochs=100, lr=lr)
-                #v_new = self.svrg(Y, X, self.gamma_y, v, u_new, num_epochs=30, lr=lr)
             elif method == "GD":
                 v_new = self.gradient_descent(Y, X, self.gamma_y, v, u_new, num_epochs=100, lr=lr)
             elif method == "ASVRG":
@@ -67,7 +70,7 @@ class ALS_CCA:
             v_new /= np.linalg.norm(v_new,axis=0) + 1e-8
 
             num_passes += 1
-            #suboptimality.append(helper.compute_suboptimality(u_new, u_opt, v_new, v_opt))
+            suboptimality.append(helper.compute_suboptimality(u_new, u_opt, v_new, v_opt))
 
 
             #if np.linalg.norm(u_new - u) < self.tol and np.linalg.norm(v_new - v) < self.tol:
@@ -205,27 +208,23 @@ class ALS_CCA:
 
         return u
 
-    def gsc(self, C, W):
+    def inprod(self, u, M, v=None):
         """
-        Generalized Gram-Schmidt orthogonalization (GSC) with respect to a positive definite metric C.
-        Ensures that W is orthonormal under the metric C.
+        Inner product with respect to a metric M.
         """
-        return self.gs(W,C)
-
-    def inprod(u, M, v=None):
         v = u if v is None else v
-        return u.dot(M.dot(v.T))
+        return u.T @ M @ v
 
-    def gs(self,A, M):
+    def gs(self, A, M):
         """
-        Gram-Schmidt with inner product for M
+        Gram-Schmidt orthogonalization with respect to metric M.
         """
         A = A.copy()
         A[:, 0] = A[:, 0] / np.sqrt(self.inprod(A[:, 0], M))
 
         for i in range(1, A.shape[1]):
             Ai = A[:, i]
-            for j in range(0, i):
+            for j in range(i):
                 Aj = A[:, j]
                 t = self.inprod(Ai, M, Aj)
                 Ai = Ai - t * Aj

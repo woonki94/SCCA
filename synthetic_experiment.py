@@ -47,7 +47,7 @@ if __name__ == "__main__":
     #X,Y = helper.generate_controlled_cca_data(dx=10, dy=10, N=100,noise_level=2) #Low rank, Sparsity ensured Correlated data
 
     #init algorithms
-    cca = CCA(n_components=2,max_iter=10000)
+    cca = CCA(n_components=10,max_iter=10000)
     als_cca = ALS_CCA()
     als_cca_gd = ALS_CCA()
     als_cca_sgd = ALS_CCA()
@@ -55,6 +55,8 @@ if __name__ == "__main__":
     svd_cca = SVD_CCA()
     si_cca = SI_CCA()
     si_cca_asvrg = SI_CCA()
+
+
 
     #Find Direction
     cca.fit(X,Y)
@@ -70,7 +72,7 @@ if __name__ == "__main__":
     print(u_si.shape)
     print(u_als_sgd)
 
-    #plot_convergence(suboptimality_gd, suboptimality_svrg,suboptimality_asvrg,suboptimality_si,suboptimality_si_asvrg)
+    plot_convergence(suboptimality_gd, suboptimality_svrg,suboptimality_asvrg,suboptimality_si,suboptimality_si_asvrg)
     #To see Equaivalent result, extract only the dominant cca component
     #from sklearn cca.
     X_proj, Y_proj = cca.transform(X,Y)

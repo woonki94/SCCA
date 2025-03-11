@@ -8,6 +8,7 @@ from sklearn.metrics import accuracy_score
 
 import helper
 from ALS_CCA import ALS_CCA
+from ALS_f import TALS_CCA
 from SI_CCA import SI_CCA
 
 
@@ -54,25 +55,25 @@ def iterative_cca(cca_model, X1, X2, n_components):
 np.random.seed(42)
 
 # Number of samples and features
-n_samples = 1000
-n_features = 10 # Latent features
-noise_level = 0.2
+n_samples = 10000
+n_features = 5 # Latent features
+noise_level = 0.5
 
 # Generate latent variables
 X_latent = np.random.randn(n_samples, n_features)
 
 # Create two different "views" using linear transformations
-W1 = np.random.randn(n_features, 1)  # First view transformation
-W2 = np.random.randn(n_features, 1)  # Second view transformation
+W1 = np.random.randn(n_features, 5)  # First view transformation
+W2 = np.random.randn(n_features, 5)  # Second view transformation
 
-X1 = X_latent @ W1 + noise_level * np.random.randn(n_samples, 1)  # First view with noise
-X2 = X_latent @ W2 + noise_level * np.random.randn(n_samples, 1)  # Second view with noise
+X1 = X_latent @ W1 + noise_level * np.random.randn(n_samples, 5)  # First view with noise
+X2 = X_latent @ W2 + noise_level * np.random.randn(n_samples, 5)  # Second view with noise
 #print(X2.shape)
 # Generate binary labels based on latent features
 y = (X_latent[:, 0] + X_latent[:, 1] > 0).astype(int)  # Simple linear decision boundary
 
 # Split into training and testing sets
-X1_train, X1_test, X2_train, X2_test, y_train, y_test = train_test_split(X1, X2, y, test_size=0.1, random_state=42)
+X1_train, X1_test, X2_train, X2_test, y_train, y_test = train_test_split(X1, X2, y, test_size=0.3, random_state=42)
 
 # Train SVM on first view only
 svm = SVC(kernel='linear', random_state=42)
@@ -83,16 +84,27 @@ print(f"SVM Accuracy on Single View: {acc_svm_single:.4f}")
 
 # Apply Canonical Correlation Analysis (CCA) to combine views
 #cca = CCA(n_components=10)  #
-cca = SI_CCA()
+cca = CCA(n_components=5)
+tals_cca = TALS_CCA(X1_train, X2_train, 5, 10)
+tals_cca_test = TALS_CCA(X1_test, X2_test, 5, 10)
+a, b = tals_cca.run()
+a1, b1 = tals_cca_test.run()
 
-'''
 X1_train_cca, X2_train_cca = cca.fit_transform(X1_train, X2_train)
 X1_test_cca, X2_test_cca = cca.transform(X1_test, X2_test)
+
 '''
 cca.fit(X1_train, X2_train,method = "SVRG")
 X1_train_cca, X2_train_cca = cca.transform( X1_train, X2_train)
 cca.fit(X1_test, X2_test,method = "SVRG")
 X1_test_cca, X2_test_cca = cca.transform( X1_test, X2_test)
+'''
+
+
+X1_train_cca = X1_train@a
+X2_train_cca = X2_train@b
+X1_test_cca = X1_test@a
+X2_test_cca = X2_test@b
 
 # Concatenate the CCA-transformed views
 X_train_cca = np.concatenate([X1_train_cca, X2_train_cca], axis=1)
@@ -115,6 +127,6 @@ if acc_svm_cca > acc_svm_single:
 else:
     print("CCA did not improve SVM classification accuracy.")
 
-helper.plot_correlation_points(X1_train_cca,X2_train_cca)
+helper.plot_correlation_points(X1_train_cca,X2_train_cca,title = "dasdasd")
 corr = helper.canonical_correlation(X1_train_cca, X2_train_cca)
 print(corr)
