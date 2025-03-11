@@ -15,3 +15,7 @@ reference/
 
 # Ignore system files (macOS, Windows, Linux)
 .DS_Store
+
+
+# Ignore scratch files
+scratch/
