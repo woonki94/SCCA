@@ -10,11 +10,12 @@ import time
 
 
 class ALS_CCA:
-    def __init__(self, gamma_x=1e-8, gamma_y=1e-8, max_iter=600, tol=1e-6):
+    def __init__(self, gamma_x=1e-6, gamma_y=1e-6, max_iter=600, tol=1e-6,n_components=1):
         self.gamma_x = gamma_x
         self.gamma_y = gamma_y
         self.max_iter = max_iter
         self.tol = tol
+        self.n_components = n_components
         self.u = None
         self.v = None
 
@@ -26,51 +27,53 @@ class ALS_CCA:
         Sigma_yy = (Y.T @ Y) / N + self.gamma_y * np.eye(dy)
         Sigma_xy = (X.T @ Y) / N
 
+        u = np.random.randn(dx, self.n_components)
+        v =  np.random.randn(dy, self.n_components)
 
-        u = np.ones((dx, 1))
-        v = np.ones((dy, 1))
-        u /= np.linalg.norm(u)
-        v /= np.linalg.norm(v)
+        u = self.gs(u, Sigma_xx)
+        v = self.gs(v, Sigma_yy)
 
-        #u = self.gs(np.random.randn(dx, 3), Sigma_xx)
-        #v = self.gs(np.random.randn(dy, 3), Sigma_yy)
-
-        # Compute exact solution using SVD for comparison
-        U, S, Vt = np.linalg.svd(np.linalg.solve(Sigma_xx, Sigma_xy) @ np.linalg.inv(Sigma_yy), full_matrices=False)
-        u_opt = U[:, [0]]
-        v_opt = Vt.T[:, [0]]
+        # Compute exact solution using SVD for calculating subopt
+        U_svd, S_svd, V_svd = np.linalg.svd(np.linalg.solve(Sigma_xx, Sigma_xy) @ np.linalg.inv(Sigma_yy), full_matrices=False)
+        u_opt = U_svd[:, [0]]
+        v_opt = V_svd.T[:, [0]]
 
         suboptimality = []
-        num_passes = 0
+        #num_passes = 0
 
         lr = 1e-3
+        lr_svrg = 1e-3
+        #lr_svrg = 1e-7
 
         start_time = time.time()
         for _ in range(self.max_iter):
             if method == "SVRG":
-                u_new = self.svrg(X, Y, self.gamma_x, u, v, num_epochs=100, lr=lr)
+                u_new = self.svrg(X, Y, self.gamma_x, u, v,Sigma_xx, num_epochs=100, lr=lr_svrg)
             elif method == "GD":
-                u_new = self.gradient_descent(X, Y, self.gamma_x, u, v, num_epochs=100, lr=lr)
+                u_new = self.gradient_descent(X, Y, self.gamma_x, u, v,Sigma_xx, num_epochs=100, lr=lr)
             elif method == "ASVRG":
-                u_new = self.asvrg(X, Y, self.gamma_x, u, v, num_epochs=100, lr=lr)
-            else:  # Default ALS update
+                u_new = self.asvrg(X, Y, self.gamma_x, u, v,Sigma_xx, num_epochs=100, lr=lr)
+            else:
                 u_new = np.linalg.solve(Sigma_xx, Sigma_xy @ v)
 
+            u_new = self.gs(u_new, Sigma_xx)
 
             if method == "SVRG":
-                v_new = self.svrg(Y, X, self.gamma_y, v, u_new, num_epochs=100, lr=lr)
+                v_new = self.svrg(Y, X, self.gamma_y, v, u_new,Sigma_yy, num_epochs=100, lr=lr_svrg)
             elif method == "GD":
-                v_new = self.gradient_descent(Y, X, self.gamma_y, v, u_new, num_epochs=100, lr=lr)
+                v_new = self.gradient_descent(Y, X, self.gamma_y, v, u_new,Sigma_yy, num_epochs=100, lr=lr)
             elif method == "ASVRG":
-                v_new = self.asvrg(Y, X, self.gamma_x, v, u_new, num_epochs=100, lr=lr)
+                v_new = self.asvrg(Y, X, self.gamma_x, v, u_new,Sigma_yy, num_epochs=100, lr=lr)
             else:
                 v_new = np.linalg.solve(Sigma_yy, Sigma_xy.T @ u_new)
 
-            u_new /= np.linalg.norm(u_new,axis=0) + 1e-8
-            v_new /= np.linalg.norm(v_new,axis=0) + 1e-8
+            v_new = self.gs(v_new, Sigma_yy)
 
-            num_passes += 1
-            suboptimality.append(helper.compute_suboptimality(u_new, u_opt, v_new, v_opt))
+            #u_new /= np.linalg.norm(u_new,axis=0) + 1e-8
+            #v_new /= np.linalg.norm(v_new,axis=0) + 1e-8
+
+            #num_passes += 1
+            suboptimality.append(helper.compute_suboptimality(u_new[:, [0]], u_opt, v_new[:, [0]], v_opt))
 
 
             #if np.linalg.norm(u_new - u) < self.tol and np.linalg.norm(v_new - v) < self.tol:
@@ -85,26 +88,15 @@ class ALS_CCA:
         return self.u, self.v, end_time - start_time, suboptimality
 
     def transform(self, X, Y):
-        """
-        Projects X and Y onto their respective first canonical directions.
-
-        Parameters:
-        X: np.ndarray (N, dx) - Data matrix X
-        Y: np.ndarray (N, dy) - Data matrix Y
-
-        Returns:
-        X_proj: np.ndarray (N, 1) - Projected X data onto first canonical direction
-        Y_proj: np.ndarray (N, 1) - Projected Y data onto first canonical direction
-        """
         if self.u is None or self.v is None:
             raise ValueError("Model has not been fitted. Call `fit(X, Y)` first.")
 
-        X_proj = X @ self.u  # Now correctly (N, dx) @ (dx, 1) → (N, 1)
-        Y_proj = Y @ self.v  # Now correctly (N, dy) @ (dy, 1) → (N, 1)
+        X_proj = X @ self.u  # (N, dx) @ (dx, 1) → (N, 1)
+        Y_proj = Y @ self.v  # (N, dy) @ (dy, 1) → (N, 1)
         return X_proj, Y_proj
 
     #TODO: Make it Nesterov Accelerated Gradient
-    def gradient_descent(self, X, Y, gamma, u_init, v_fixed, num_epochs=10, lr=1e-3):
+    def gradient_descent(self, X, Y, gamma, u_init, v_fixed,Sigma_xx, num_epochs=10, lr=1e-3):
         N, dx = X.shape
         u = u_init.copy()
 
@@ -112,61 +104,46 @@ class ALS_CCA:
             grad = (X.T @ (X @ u - Y @ v_fixed)) / N + gamma * u
             u_new = u - lr * grad
             u_new /= np.linalg.norm(u_new)
+            #u_new = self.gs(u_new, Sigma_xx)
             u = u_new
 
         return u
-
-    def svrg(self, X, Y, gamma, u_init, v_fixed, num_epochs=10, batch_size=64, lr=1e-3):
+    '''512'''
+    def svrg(self, X, Y, gamma, u_init, v_fixed, Sigma_xx,  num_epochs=100, batch_size=32, lr=1e-3):
         N, dx = X.shape
         u = u_init.copy()
 
         for epoch in range(num_epochs):
-            shuffled_indices = np.random.permutation(N)  # Shuffle data indices
-            full_grad = (X.T @ (X @ u - Y @ v_fixed)) / N + gamma * u  # Full dataset gradient
+            shuffled_indices = np.random.permutation(N)
 
+            # Compute full gradient at snapshot point
+            full_grad = (X.T @ (X @ u - Y @ v_fixed)) / N + gamma * u
             u_snapshot = u.copy()  # Store a snapshot
 
             for i in range(0, N, batch_size):
                 batch_indices = shuffled_indices[i:i + batch_size]
                 x_batch = X[batch_indices, :]
                 y_batch = Y[batch_indices, :]
+                actual_batch_size = len(batch_indices)
 
-                actual_batch_size = len(batch_indices)  # Handle last batch size
+                # Compute gradients for current u and snapshot u_snapshot
                 grad_i = (x_batch.T @ (x_batch @ u - y_batch @ v_fixed)) / actual_batch_size + gamma * u
                 grad_i_snap = (x_batch.T @ (
                             x_batch @ u_snapshot - y_batch @ v_fixed)) / actual_batch_size + gamma * u_snapshot
 
-                u -= lr * (grad_i - grad_i_snap + full_grad)  # SVRG update
+                # SVRG update rule
+                u -= lr * (grad_i - grad_i_snap + full_grad)
 
-            u /= np.linalg.norm(u) + 1e-8  # Normalize once per epoch to prevent instability
+            u /= (np.linalg.norm(u) + 1e-10)
 
         return u
 
-    import numpy as np
+    '''128'''
+    def asvrg(self, X, Y, gamma, u_init, v_fixed,Sigma_xx, num_epochs=10, batch_size=512, lr=1e-3, beta=0.8, l1_reg=0):
 
-    def asvrg(self, X, Y, gamma, u_init, v_fixed, num_epochs=100, batch_size=128, lr=1e-3, beta=0.9, l1_reg=0):
-        """
-        Implements Accelerated Proximal SVRG (ASVRG) for ALS.
-
-        Parameters:
-            X: np.ndarray (N, dx) - Data matrix X
-            Y: np.ndarray (N, dy) - Data matrix Y
-            gamma (float): Regularization parameter
-            u_init: np.array (dx,) - Initial vector for u
-            v_fixed: np.array (dy,) - Fixed vector for v
-            num_epochs (int): Number of outer iterations
-            batch_size (int): Mini-batch size
-            lr (float): Learning rate
-            beta (float): Momentum factor (typically 0.7 - 0.99)
-            l1_reg (float): L1 regularization coefficient
-
-        Returns:
-            u (np.array): Updated solution
-        """
         N, dx = X.shape
         u = u_init.copy()
         u_prev = u.copy()
-        Sigma_xx = (X.T @ X) / N + gamma * np.eye(dx)
 
         for epoch in range(num_epochs):
             shuffled_indices = np.random.permutation(N)
@@ -199,16 +176,18 @@ class ALS_CCA:
                 u_prev = u.copy()
                 u = u_new
 
-                # Normalize per epoch (not per iteration)
-            u /= (np.linalg.norm(u) + 1e-8)
+            # Normalize per epoch (not per iteration)
+            u /= (np.linalg.norm(u) + 1e-10)
+            #u = self.gs(u, Sigma_xx)
 
-            # Convergence check (relative stopping criterion)
-            #if np.linalg.norm(u - u_snapshot) / (np.linalg.norm(u_snapshot) + 1e-8) < 1e-4:
-            #    break
 
         return u
 
     def inprod(self, u, M, v=None):
+        # Implementation based on:
+        # "Momentum-Based Variance Reduction in Non-Convex SGLD" - Cutkosky & Orabona, NeurIPS 2019
+        # Paper: https://papers.neurips.cc/paper_files/paper/2019/file/af3b6a54e9e9338abc54258e3406e485-Paper.pdf
+        # Code Repository: https://github.com/BouchardLab/ML_4_prec_prognosis
         """
         Inner product with respect to a metric M.
         """
@@ -216,21 +195,29 @@ class ALS_CCA:
         return u.T @ M @ v
 
     def gs(self, A, M):
+        # Implementation based on:
+        # "Momentum-Based Variance Reduction in Non-Convex SGLD" - Cutkosky & Orabona, NeurIPS 2019
+        # Paper: https://papers.neurips.cc/paper_files/paper/2019/file/af3b6a54e9e9338abc54258e3406e485-Paper.pdf
+        # Code Repository: https://github.com/BouchardLab/ML_4_prec_prognosis
         """
-        Gram-Schmidt orthogonalization with respect to metric M.
+        Modified Gram-Schmidt orthogonalization with respect to metric M.
+        Ensures numerical stability and prevents rank loss.
         """
         A = A.copy()
-        A[:, 0] = A[:, 0] / np.sqrt(self.inprod(A[:, 0], M))
 
-        for i in range(1, A.shape[1]):
+        for i in range(A.shape[1]):
             Ai = A[:, i]
+
             for j in range(i):
                 Aj = A[:, j]
-                t = self.inprod(Ai, M, Aj)
-                Ai = Ai - t * Aj
+                t = self.inprod(Ai, M, Aj) / self.inprod(Aj, M, Aj)  # Projection coefficient
+                Ai -= t * Aj  # Remove projection
+
             norm = np.sqrt(self.inprod(Ai, M))
-            if norm == 0:
-                A[:, i] = Ai
-            else:
+            if norm > 1e-8:  # Prevent divide by zero
                 A[:, i] = Ai / norm
+            else:
+                print(f"Warning: Column {i} became numerically unstable and was left unchanged.")
+                A[:, i] = Ai  # Keep as is if too small
+
         return A

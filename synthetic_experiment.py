@@ -16,19 +16,17 @@ def plot_convergence(suboptimality_gd, suboptimality_svrg, suboptimality_asvrg, 
     plt.figure(figsize=(6, 4))
 
     # Plot Gradient Descent (GD)
-    plt.plot(suboptimality_gd, label="GD", color="blue", linestyle="-", linewidth=2)
+    plt.plot(suboptimality_gd, label="GD", color="black", linestyle="-", linewidth=2)
 
     # Plot Stochastic Variance Reduced Gradient (SVRG)
-    plt.plot(suboptimality_svrg, label="SVRG", color="red", linestyle="--", linewidth=2)
+    plt.plot(suboptimality_svrg, label="ALS-SVRG", color="red", linestyle="-", linewidth=2)
 
     # Plot Accelerated SVRG (ASVRG)
-    plt.plot(suboptimality_asvrg, label="ASVRG", color="green", linestyle="-.", linewidth=2)
+    plt.plot(suboptimality_asvrg, label="ALS-ASVRG", color="green", linestyle="-.", linewidth=2)
 
-    plt.plot(suboptimality_si, label="SI-SVRG", color="orange", linestyle="-.", linewidth=2)
+    plt.plot(suboptimality_si, label="SI-SVRG", color="orange", linestyle="-", linewidth=2)
 
     plt.plot(suboptimality_si_asvrg, label="SI-ASVRG", color="grey", linestyle="-.", linewidth=2)
-
-
 
     plt.yscale("log")  # Log scale for better visualization
     plt.xlabel("Passes")
@@ -39,15 +37,15 @@ def plot_convergence(suboptimality_gd, suboptimality_svrg, suboptimality_asvrg, 
     plt.show()
 
 if __name__ == "__main__":
-    #TODO: need for more specific experiment.
+    #TODO: If have some time, implement squared precondition
     #Generate Data.
-    X, Y = helper.generate_correlated_data(dx=10, dy=10, N=100, noise_level=2)# Simple struct Correlated data
-    #Some points to be highlighted, as noise level goes up,  SVRG method gets faster
-    #X,Y = helper.generate_strictly_low_rank_data(dx=10, dy=10, N=100,noise_level=2) #Low rank, Sparsity ensured Correlated data
-    #X,Y = helper.generate_controlled_cca_data(dx=10, dy=10, N=100,noise_level=2) #Low rank, Sparsity ensured Correlated data
+    #X, Y = helper.generate_correlated_data(dx=10, dy=10, N=1000, noise_level=2)# Simple struct Correlated data
+    # as noise level goes up,  SVRG method gets faster why?
+    #X,Y = helper.generate_strictly_low_rank_data(dx=10, dy=10, N=100,noise_level=2)
+    X,Y = helper.generate_controlled_cca_data(dx=10, dy=10, N=1000,noise_level=0.8) #Low rank, Sparsity ensured Correlated data
 
     #init algorithms
-    cca = CCA(n_components=10,max_iter=10000)
+    cca = CCA(n_components=2,max_iter=10000)
     als_cca = ALS_CCA()
     als_cca_gd = ALS_CCA()
     als_cca_sgd = ALS_CCA()
@@ -55,7 +53,6 @@ if __name__ == "__main__":
     svd_cca = SVD_CCA()
     si_cca = SI_CCA()
     si_cca_asvrg = SI_CCA()
-
 
 
     #Find Direction
@@ -130,10 +127,3 @@ if __name__ == "__main__":
     print("ASVRG ALS Correlation: ", asvrg_corr)
     print("Shift and Invert Correlation: ", si_corr)
     print("Shift and Invert Correlation(ASVRG): ", asvrg_si_corr)
-
-
-    pca = PCA(n_components=10)
-    pca.fit(X.T)
-    X_pca = pca.transform(X.T)
-
-    print(X_pca.shape)
