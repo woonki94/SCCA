@@ -37,7 +37,7 @@ This repo includes two main algorithmic variants:
 ## Report
 
 You can view the detailed project report here:  
-[`/report/AI586_Final_Project_Woonki_Kim`](./report/AI586_Final_Project_Woonki_Kim)
+[`/report/AI586_Final_Project_Woonki_Kim`](./report/AI586_Final_Project_Woonki_Kim.pdf)
 
 
 @article{wang2016efficient,
